@@ -21,7 +21,7 @@ export default function ModelSelector({
       <select
         value={selectedModel}
         onChange={(e) => onModelChange(e.target.value)}
-        className="bg-terminal-dark text-terminal-green terminal-border px-2 py-1 font-mono text-sm outline-none cursor-pointer"
+        className="bg-terminal-dark text-terminal-green terminal-border px-2 py-1 font-mono text-sm outline-hidden cursor-pointer"
       >
         {models.length === 0 ? (
           <option value="">Loading models...</option>

@@ -38,7 +38,7 @@ export default function MessageList({ messages }: MessageListProps) {
               [{formatTimestamp(message.timestamp)}]
             </span>
           </div>
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap wrap-break-word">
             {message.content}
           </div>
           {message.images && message.images.length > 0 && (

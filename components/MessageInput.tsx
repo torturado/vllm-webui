@@ -39,7 +39,7 @@ export default function MessageInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={isLoading}
-          className="flex-1 bg-terminal-dark text-terminal-green font-mono text-sm p-2 border-none outline-none resize-none min-h-[60px] max-h-[200px]"
+          className="flex-1 bg-terminal-dark text-terminal-green font-mono text-sm p-2 border-none outline-hidden resize-none min-h-[60px] max-h-[200px]"
           rows={2}
         />
         <button
