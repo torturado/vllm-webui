@@ -23,37 +23,31 @@ export async function POST(request: NextRequest) {
 
 		const providerConfig: ProviderConfig | undefined = provider;
 
-		// Process images in batches to avoid overwhelming the API
-		const batchSize = 10;
-		const batches: string[][] = [];
-
-		for (let i = 0; i < images.length; i += batchSize) {
-			batches.push(images.slice(i, i + batchSize));
-		}
-
+		// Process each image individually (no shared context)
+		// This prevents context overflow when processing many images
 		const results: Array<{
-			batchIndex: number;
+			imageIndex: number;
 			data: string;
 			error?: string;
 		}> = [];
 
-		for (let i = 0; i < batches.length; i++) {
+		for (let i = 0; i < images.length; i++) {
 			try {
-				const batch = batches[i];
+				const singleImage = [images[i]]; // Process one image at a time
 				const data = await ocrExtraction(
 					model,
-					batch,
+					singleImage,
 					prompt,
 					providerConfig
 				);
 				results.push({
-					batchIndex: i,
+					imageIndex: i,
 					data:
 						typeof data === "string" ? data : JSON.stringify(data),
 				});
 			} catch (error: any) {
 				results.push({
-					batchIndex: i,
+					imageIndex: i,
 					data: "",
 					error: error.message || "OCR extraction failed",
 				});
@@ -63,7 +57,6 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({
 			success: true,
 			results,
-			totalBatches: batches.length,
 			totalImages: images.length,
 		});
 	} catch (error: any) {

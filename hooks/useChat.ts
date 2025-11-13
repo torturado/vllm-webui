@@ -8,6 +8,7 @@ export function useChat() {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [streamingContent, setStreamingContent] = useState<string>("");
 	const abortControllerRef = useRef<AbortController | null>(null);
 
 	const addMessage = useCallback(
@@ -19,7 +20,8 @@ export function useChat() {
 			};
 			setMessages((prev) => [...prev, newMessage]);
 			return newMessage;
-		}
+		},
+		[]
 	);
 
 	const sendMessage = useCallback(
@@ -43,6 +45,7 @@ export function useChat() {
 
 			setIsLoading(true);
 			setError(null);
+			setStreamingContent(""); // Reset streaming content
 
 			// Add user message
 			const userMessage = addMessage({
@@ -135,6 +138,9 @@ export function useChat() {
 									assistantContent += parsed.content;
 									receivedChunks++;
 
+									// Update streaming content in real-time
+									setStreamingContent(assistantContent);
+
 									// Estimate tokens (rough approximation: 1 token ≈ 4 characters)
 									totalTokens = Math.ceil(
 										assistantContent.length / 4
@@ -188,15 +194,18 @@ export function useChat() {
 					});
 				}
 
+				setStreamingContent(""); // Clear streaming content when done
 				setIsLoading(false);
 			} catch (error: any) {
 				if (error.name === "AbortError") {
 					console.log("Request aborted");
+					setStreamingContent(""); // Clear streaming content on abort
 				} else {
 					console.error("Error sending message:", error);
 					setError(error.message || "Failed to send message");
-					setIsLoading(false);
+					setStreamingContent(""); // Clear streaming content on error
 				}
+				setIsLoading(false);
 			}
 		},
 		[messages, isLoading, addMessage]
@@ -219,6 +228,7 @@ export function useChat() {
 		messages,
 		isLoading,
 		error,
+		streamingContent,
 		sendMessage,
 		addMessage,
 		cancelRequest,

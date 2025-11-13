@@ -4,8 +4,6 @@ import { OCRImage, OCRResult, ProviderConfig } from "@/lib/types";
 import { generateId, imageToBase64 } from "@/lib/utils";
 import { useCallback, useState } from "react";
 
-const BATCH_SIZE = 10;
-
 export function useOCR() {
 	const [images, setImages] = useState<OCRImage[]>([]);
 	const [isProcessing, setIsProcessing] = useState(false);
@@ -59,37 +57,36 @@ export function useOCR() {
 				images.map(async (img) => await imageToBase64(img.file))
 			);
 
-			// Process in batches
-			const batches: string[][] = [];
-			for (let i = 0; i < imageData.length; i += BATCH_SIZE) {
-				batches.push(imageData.slice(i, i + BATCH_SIZE));
-			}
-
+			// Process each image individually (no shared context)
 			const allResults: OCRResult[] = [];
 			let processedCount = 0;
 			let errorCount = 0;
 
-			try {
-				for (
-					let batchIndex = 0;
-					batchIndex < batches.length;
-					batchIndex++
-				) {
-					const batch = batches[batchIndex];
+			// Cache to store results as they complete
+			const resultCache: Map<number, OCRResult> = new Map();
 
-					// Update image statuses to processing
+			try {
+				// Process images sequentially to avoid overwhelming the API
+				// but each image is processed independently
+				for (
+					let imageIndex = 0;
+					imageIndex < images.length;
+					imageIndex++
+				) {
+					const imageBase64 = imageData[imageIndex];
+					const imageId = images[imageIndex]?.id || generateId();
+
+					// Update image status to processing
 					setImages((prev) =>
-						prev.map((img, idx) => {
-							const startIdx = batchIndex * BATCH_SIZE;
-							const endIdx = startIdx + batch.length;
-							if (idx >= startIdx && idx < endIdx) {
-								return { ...img, status: "processing" };
-							}
-							return img;
-						})
+						prev.map((img, i) =>
+							i === imageIndex
+								? { ...img, status: "processing" }
+								: img
+						)
 					);
 
 					try {
+						// Process single image - no context shared between images
 						const response = await fetch("/api/vllm/ocr", {
 							method: "POST",
 							headers: {
@@ -97,30 +94,42 @@ export function useOCR() {
 							},
 							body: JSON.stringify({
 								model,
-								images: batch,
+								images: [imageBase64], // Single image per request
 								prompt,
 								provider,
 							}),
 						});
 
 						if (!response.ok) {
+							const errorData = await response
+								.json()
+								.catch(() => ({}));
 							throw new Error(
-								`OCR batch ${batchIndex + 1} failed`
+								errorData.error ||
+									`OCR failed for image ${imageIndex + 1}`
 							);
 						}
 
 						const data = await response.json();
 
-						// Process results
-						data.results.forEach((result: any, idx: number) => {
-							const imageIndex = batchIndex * BATCH_SIZE + idx;
+						console.log(`[OCR] Image ${imageIndex + 1} response:`, {
+							hasResults: !!data.results,
+							resultsLength: data.results?.length || 0,
+							firstResult: data.results?.[0],
+						});
+
+						// Process result (should only be one result for single image)
+						if (data.results && data.results.length > 0) {
+							const result = data.results[0];
 							if (result.error) {
 								errorCount++;
-								allResults.push({
-									imageId:
-										images[imageIndex]?.id || generateId(),
+								const ocrResult: OCRResult = {
+									imageId,
+									data: null,
 									error: result.error,
-								});
+								};
+								resultCache.set(imageIndex, ocrResult);
+								allResults.push(ocrResult);
 
 								setImages((prev) =>
 									prev.map((img, i) =>
@@ -134,34 +143,93 @@ export function useOCR() {
 									)
 								);
 							} else {
-								processedCount++;
-								allResults.push({
-									imageId:
-										images[imageIndex]?.id || generateId(),
-									data: result.data,
-								});
-
-								setImages((prev) =>
-									prev.map((img, i) =>
-										i === imageIndex
-											? {
-													...img,
-													status: "completed",
-													extractedData: result.data,
-											  }
-											: img
-									)
+								// Check if data exists and is not empty
+								const resultData = result.data;
+								console.log(
+									`[OCR] Image ${imageIndex + 1} data:`,
+									{
+										hasData:
+											resultData !== null &&
+											resultData !== undefined,
+										dataType: typeof resultData,
+										dataLength:
+											typeof resultData === "string"
+												? resultData.length
+												: "N/A",
+										dataPreview:
+											typeof resultData === "string"
+												? resultData.substring(0, 100)
+												: resultData,
+									}
 								);
+
+								if (
+									resultData !== null &&
+									resultData !== undefined &&
+									resultData !== ""
+								) {
+									processedCount++;
+									const ocrResult: OCRResult = {
+										imageId,
+										data: resultData,
+									};
+									resultCache.set(imageIndex, ocrResult);
+									allResults.push(ocrResult);
+
+									console.log(
+										`[OCR] Image ${
+											imageIndex + 1
+										} saved successfully. Total results: ${
+											allResults.length
+										}`
+									);
+
+									setImages((prev) =>
+										prev.map((img, i) =>
+											i === imageIndex
+												? {
+														...img,
+														status: "completed",
+														extractedData:
+															resultData,
+												  }
+												: img
+										)
+									);
+								} else {
+									// Data is empty or null
+									errorCount++;
+									const ocrResult: OCRResult = {
+										imageId,
+										data: null,
+										error: "Empty result returned from API",
+									};
+									resultCache.set(imageIndex, ocrResult);
+									allResults.push(ocrResult);
+
+									setImages((prev) =>
+										prev.map((img, i) =>
+											i === imageIndex
+												? {
+														...img,
+														status: "error",
+														error: "Empty result returned from API",
+												  }
+												: img
+										)
+									);
+								}
 							}
-						});
-					} catch (error: any) {
-						errorCount += batch.length;
-						batch.forEach((_, idx) => {
-							const imageIndex = batchIndex * BATCH_SIZE + idx;
-							allResults.push({
-								imageId: images[imageIndex]?.id || generateId(),
-								error: error.message || "Processing failed",
-							});
+						} else {
+							// No result returned
+							errorCount++;
+							const ocrResult: OCRResult = {
+								imageId,
+								data: null,
+								error: "No result returned from API",
+							};
+							resultCache.set(imageIndex, ocrResult);
+							allResults.push(ocrResult);
 
 							setImages((prev) =>
 								prev.map((img, i) =>
@@ -169,19 +237,40 @@ export function useOCR() {
 										? {
 												...img,
 												status: "error",
-												error:
-													error.message ||
-													"Processing failed",
+												error: "No result returned from API",
 										  }
 										: img
 								)
 							);
-						});
+						}
+					} catch (error: any) {
+						errorCount++;
+						const ocrResult: OCRResult = {
+							imageId,
+							data: null,
+							error: error.message || "Processing failed",
+						};
+						resultCache.set(imageIndex, ocrResult);
+						allResults.push(ocrResult);
+
+						setImages((prev) =>
+							prev.map((img, i) =>
+								i === imageIndex
+									? {
+											...img,
+											status: "error",
+											error:
+												error.message ||
+												"Processing failed",
+									  }
+									: img
+							)
+						);
 					}
 
-					processedCount = Math.min(processedCount, images.length);
+					// Update progress after each image
 					const currentProgress = {
-						processed: processedCount,
+						processed: processedCount + errorCount,
 						total: images.length,
 						errors: errorCount,
 					};
@@ -191,6 +280,21 @@ export function useOCR() {
 					}
 				}
 
+				// All images processed - set final results from cache
+				console.log(
+					`[OCR] Processing complete. Total results: ${allResults.length}`,
+					{
+						successful: allResults.filter((r) => r.data && !r.error)
+							.length,
+						failed: allResults.filter((r) => r.error).length,
+						allResults: allResults.map((r) => ({
+							imageId: r.imageId,
+							hasData: r.data !== null && r.data !== undefined,
+							dataType: typeof r.data,
+							error: r.error,
+						})),
+					}
+				);
 				setResults(allResults);
 			} catch (error) {
 				console.error("Error processing OCR:", error);

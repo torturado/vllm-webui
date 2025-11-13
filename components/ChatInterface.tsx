@@ -36,6 +36,7 @@ export default function ChatInterface({
 		messages,
 		isLoading,
 		error,
+		streamingContent,
 		sendMessage,
 		clearMessages,
 		addMessage,
@@ -110,7 +111,7 @@ export default function ChatInterface({
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-	}, [messages]);
+	}, [messages, streamingContent]);
 
 	const handleSend = async (content: string) => {
 		// Ensure we have a current session
@@ -251,7 +252,7 @@ export default function ChatInterface({
 			)}
 
 				<div className="flex-1 overflow-hidden">
-					<MessageList messages={messages} />
+					<MessageList messages={messages} streamingContent={streamingContent} isLoading={isLoading} />
 					<div ref={messagesEndRef} />
 				</div>
 

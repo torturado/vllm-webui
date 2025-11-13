@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 export default function Home() {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedOCRModel, setSelectedOCRModel] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'chat' | 'ocr'>('chat');
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -52,11 +53,14 @@ export default function Home() {
         const ocrModel = data.models.find((m: Model) =>
           m.id.toLowerCase().includes('deepseek') && m.id.toLowerCase().includes('ocr')
         );
-        setSelectedModel(ocrModel?.id || data.models[0].id);
+        const defaultModel = data.models[0].id;
+        setSelectedModel(defaultModel);
+        setSelectedOCRModel(defaultModel);
       } else {
         // Demo mode: add a fake model for preview
         setModels([{ id: 'demo-model', object: 'model', owned_by: 'demo' }]);
         setSelectedModel('demo-model');
+        setSelectedOCRModel('demo-model');
       }
       setIsLoadingModels(false);
     } catch (error) {
@@ -64,19 +68,14 @@ export default function Home() {
       // Demo mode: add a fake model for preview when connection fails
       setModels([{ id: 'demo-model', object: 'model', owned_by: 'demo' }]);
       setSelectedModel('demo-model');
+      setSelectedOCRModel('demo-model');
       setIsLoadingModels(false);
     }
   };
 
   const handleOCRProcess = async () => {
-    if (images.length === 0 || !selectedModel) return;
-
-    // Use deepseek-ocr if available, otherwise use selected model
-    const ocrModel = models.find((m) =>
-      m.id.toLowerCase().includes('deepseek') && m.id.toLowerCase().includes('ocr')
-    )?.id || selectedModel;
-
-    await processImages(ocrModel, undefined, undefined, settings.provider);
+    if (images.length === 0 || !selectedOCRModel) return;
+    await processImages(selectedOCRModel, undefined, undefined, settings.provider);
   };
 
   return (
@@ -159,31 +158,68 @@ export default function Home() {
             </div>
           ) : (
             <div className="h-full overflow-y-auto space-y-4">
-              <OCRUploader
-                images={images}
-                onAddImages={addImages}
-                onRemoveImage={removeImage}
-                isProcessing={isProcessing}
-              />
-
-              {images.length > 0 && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleOCRProcess}
-                    disabled={isProcessing || !selectedModel}
-                    className="terminal-border px-4 py-2 font-mono text-sm disabled:opacity-50"
-                  >
-                    {isProcessing ? 'PROCESSING...' : 'PROCESS OCR'}
-                  </button>
-                  <button
-                    onClick={clearImages}
-                    disabled={isProcessing}
-                    className="terminal-border px-4 py-2 font-mono text-sm disabled:opacity-50"
-                  >
-                    CLEAR
-                  </button>
+              {isLoadingModels ? (
+                <div className="flex items-center justify-center h-full text-terminal-green/50 font-mono">
+                  Loading models...
                 </div>
-              )}
+              ) : (
+                <>
+                  {models.length === 0 || models[0]?.id === 'demo-model' ? (
+                    <div className="terminal-border border-terminal-amber p-2 mb-2 text-terminal-amber text-xs font-mono">
+                      ⚠ DEMO MODE: {settings.provider.name} server not connected. Interface is shown for preview only.
+                    </div>
+                  ) : null}
+
+                  {/* Model Selector for OCR */}
+                  <div className="terminal-border p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <label className="text-terminal-green font-mono text-sm">
+                        OCR MODEL:
+                      </label>
+                      <select
+                        value={selectedOCRModel}
+                        onChange={(e) => setSelectedOCRModel(e.target.value)}
+                        disabled={isProcessing}
+                        className="flex-1 bg-terminal-dark text-terminal-green terminal-border px-2 py-1 font-mono text-sm outline-hidden cursor-pointer disabled:opacity-50"
+                      >
+                        {models.length === 0 ? (
+                          <option value="">Loading models...</option>
+                        ) : (
+                          models.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.id}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  <OCRUploader
+                    images={images}
+                    onAddImages={addImages}
+                    onRemoveImage={removeImage}
+                    isProcessing={isProcessing}
+                  />
+
+                  {images.length > 0 && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleOCRProcess}
+                        disabled={isProcessing || !selectedOCRModel}
+                        className="terminal-border px-4 py-2 font-mono text-sm disabled:opacity-50 hover:bg-terminal-green hover:text-terminal-dark transition-colors"
+                      >
+                        {isProcessing ? 'PROCESSING...' : 'PROCESS OCR'}
+                      </button>
+                      <button
+                        onClick={clearImages}
+                        disabled={isProcessing}
+                        className="terminal-border px-4 py-2 font-mono text-sm disabled:opacity-50 hover:bg-terminal-gray transition-colors"
+                      >
+                        CLEAR
+                      </button>
+                    </div>
+                  )}
 
               {isProcessing && (
                 <OCRProgress
@@ -194,6 +230,8 @@ export default function Home() {
               )}
 
               {results.length > 0 && <OCRResults results={results} />}
+                </>
+              )}
             </div>
           )}
         </div>
