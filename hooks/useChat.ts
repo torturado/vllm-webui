@@ -1,6 +1,6 @@
 "use client";
 
-import { ChatStats, Message } from "@/lib/types";
+import { ChatStats, Message, ProviderConfig } from "@/lib/types";
 import { generateId } from "@/lib/utils";
 import { useCallback, useRef, useState } from "react";
 
@@ -27,7 +27,8 @@ export function useChat() {
 			content: string,
 			model: string,
 			onStream?: (chunk: string) => void,
-			onStats?: (stats: ChatStats) => void
+			onStats?: (stats: ChatStats) => void,
+			provider?: ProviderConfig
 		) => {
 			if (!content.trim() || isLoading) return;
 
@@ -75,6 +76,7 @@ export function useChat() {
 								content,
 							},
 						],
+						provider,
 					}),
 					signal: abortControllerRef.current.signal,
 				});

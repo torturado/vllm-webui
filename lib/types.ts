@@ -124,3 +124,16 @@ export interface ChatRequest {
 	temperature?: number;
 	max_tokens?: number;
 }
+
+// Provider configuration types
+export type ProviderType = "vllm" | "ollama" | "lmstudio";
+
+export interface ProviderConfig {
+	type: ProviderType;
+	apiUrl: string;
+	name: string;
+}
+
+export interface Settings {
+	provider: ProviderConfig;
+}

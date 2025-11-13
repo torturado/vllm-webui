@@ -3,13 +3,23 @@ import {
 	ChatRequest,
 	Model,
 	ModelsResponse,
+	ProviderConfig,
 } from "./types";
 
-const VLLM_API_URL = process.env.VLLM_API_URL || "http://localhost:8000/v1";
+const DEFAULT_VLLM_API_URL =
+	process.env.VLLM_API_URL || "http://localhost:8000/v1";
 
-export async function listModels(): Promise<Model[]> {
+function getApiUrl(provider?: ProviderConfig): string {
+	if (provider) {
+		return provider.apiUrl;
+	}
+	return DEFAULT_VLLM_API_URL;
+}
+
+export async function listModels(provider?: ProviderConfig): Promise<Model[]> {
 	try {
-		const response = await fetch(`${VLLM_API_URL}/models`, {
+		const apiUrl = getApiUrl(provider);
+		const response = await fetch(`${apiUrl}/models`, {
 			method: "GET",
 			headers: {
 				"Content-Type": "application/json",
@@ -29,10 +39,12 @@ export async function listModels(): Promise<Model[]> {
 }
 
 export async function chatCompletion(
-	request: ChatRequest
+	request: ChatRequest,
+	provider?: ProviderConfig
 ): Promise<ChatCompletionResponse> {
 	try {
-		const response = await fetch(`${VLLM_API_URL}/chat/completions`, {
+		const apiUrl = getApiUrl(provider);
+		const response = await fetch(`${apiUrl}/chat/completions`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -58,10 +70,12 @@ export async function chatCompletion(
 }
 
 export async function* chatCompletionStream(
-	request: ChatRequest
+	request: ChatRequest,
+	provider?: ProviderConfig
 ): AsyncGenerator<string, void, unknown> {
 	try {
-		const response = await fetch(`${VLLM_API_URL}/chat/completions`, {
+		const apiUrl = getApiUrl(provider);
+		const response = await fetch(`${apiUrl}/chat/completions`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -127,7 +141,8 @@ export async function* chatCompletionStream(
 export async function ocrExtraction(
 	model: string,
 	images: string[], // Base64 encoded images
-	prompt?: string
+	prompt?: string,
+	provider?: ProviderConfig
 ): Promise<string> {
 	try {
 		const defaultPrompt = `Extract all data from these images and return it as a structured table in JSON format.
@@ -151,7 +166,8 @@ export async function ocrExtraction(
 			})),
 		];
 
-		const response = await fetch(`${VLLM_API_URL}/chat/completions`, {
+		const apiUrl = getApiUrl(provider);
+		const response = await fetch(`${apiUrl}/chat/completions`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",

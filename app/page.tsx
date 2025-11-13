@@ -4,7 +4,9 @@ import ChatInterface from '@/components/ChatInterface';
 import OCRProgress from '@/components/OCRProgress';
 import OCRResults from '@/components/OCRResults';
 import OCRUploader from '@/components/OCRUploader';
+import Settings from '@/components/Settings';
 import { useOCR } from '@/hooks/useOCR';
+import { useSettings } from '@/hooks/useSettings';
 import { Model } from '@/lib/types';
 import { useEffect, useState } from 'react';
 
@@ -13,6 +15,9 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'chat' | 'ocr'>('chat');
   const [isLoadingModels, setIsLoadingModels] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const { settings, isLoaded: settingsLoaded } = useSettings();
 
   const {
     images,
@@ -26,12 +31,20 @@ export default function Home() {
   } = useOCR();
 
   useEffect(() => {
-    loadModels();
-  }, []);
+    if (settingsLoaded) {
+      loadModels();
+    }
+  }, [settingsLoaded, settings.provider]);
 
   const loadModels = async () => {
     try {
-      const response = await fetch('/api/vllm/models');
+      const response = await fetch('/api/vllm/models', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ provider: settings.provider }),
+      });
       const data = await response.json();
       setModels(data.models || []);
       if (data.models && data.models.length > 0) {
@@ -63,7 +76,7 @@ export default function Home() {
       m.id.toLowerCase().includes('deepseek') && m.id.toLowerCase().includes('ocr')
     )?.id || selectedModel;
 
-    await processImages(ocrModel);
+    await processImages(ocrModel, undefined, undefined, settings.provider);
   };
 
   return (
@@ -80,8 +93,11 @@ export default function Home() {
                 {isLoadingModels
                   ? 'Loading models...'
                   : models[0]?.id === 'demo-model'
-                    ? 'Demo mode (vLLM not connected)'
+                    ? `Demo mode (${settings.provider.name} not connected)`
                     : `${models.length} model(s) available`}
+              </div>
+              <div className="text-terminal-green/30 text-xs font-mono mt-1">
+                Provider: {settings.provider.name}
               </div>
             </div>
             <div className="flex gap-2">
@@ -104,6 +120,12 @@ export default function Home() {
                 }`}
               >
                 OCR
+              </button>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="terminal-border px-4 py-2 text-sm font-mono hover:bg-terminal-green hover:text-terminal-dark transition-colors"
+              >
+                ⚙ SETTINGS
               </button>
             </div>
           </div>
@@ -129,6 +151,7 @@ export default function Home() {
                       models={models}
                       selectedModel={selectedModel}
                       onModelChange={setSelectedModel}
+                      provider={settings.provider}
                     />
                   </div>
                 </>
@@ -180,6 +203,12 @@ export default function Home() {
           vLLM Web UI | Terminal Interface | Press F12 for console
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <Settings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }

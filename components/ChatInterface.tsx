@@ -10,7 +10,7 @@ import {
 	getChatSessions,
 	saveChatSession
 } from '@/lib/chat-storage';
-import { Model } from '@/lib/types';
+import { Model, ProviderConfig } from '@/lib/types';
 import { useEffect, useRef, useState } from 'react';
 import MessageInput from './MessageInput';
 import MessageList from './MessageList';
@@ -23,12 +23,14 @@ interface ChatInterfaceProps {
 	models: Model[];
 	selectedModel: string;
 	onModelChange: (model: string) => void;
+	provider?: ProviderConfig;
 }
 
 export default function ChatInterface({
 	models,
 	selectedModel,
 	onModelChange,
+	provider,
 }: ChatInterfaceProps) {
 	const {
 		messages,
@@ -144,16 +146,17 @@ export default function ChatInterface({
 					enhancedContent,
 					selectedModel,
 					undefined,
-					updateStats
+					updateStats,
+					provider
 				);
 			} catch (error) {
 				console.error('Search error:', error);
 				resetStats();
-				await sendMessage(content, selectedModel, undefined, updateStats);
+				await sendMessage(content, selectedModel, undefined, updateStats, provider);
 			}
 		} else {
 			resetStats();
-			await sendMessage(content, selectedModel, undefined, updateStats);
+			await sendMessage(content, selectedModel, undefined, updateStats, provider);
 		}
 	};
 
